@@ -88,7 +88,7 @@ class HallucinationProbe:
         all_probs = np.concatenate(cls._val_probs_all)
         all_preds = np.concatenate(cls._val_preds_all)
 
-        plt.figure(figsize=(8, 8))
+        plt.figure(figsize=(6, 6))
         tprs = []
         aucs = []
         mean_fpr = np.linspace(0, 1, 100)
@@ -112,11 +112,11 @@ class HallucinationProbe:
         plt.title("ROC curves on validation folds")
         plt.legend(loc="lower right")
         plt.tight_layout()
-        plt.savefig(plot_dir / "summary_roc_val.png", dpi=200)
+        plt.savefig(plot_dir / "summary_roc_val.png", dpi=150)
         plt.grid(alpha=0.5)
         plt.close()
 
-        plt.figure(figsize=(8, 5))
+        plt.figure(figsize=(8, 4))
         n_folds = 5
         cmap_truth = plt.get_cmap("Blues")
         cmap_halluc = plt.get_cmap("Oranges")
@@ -137,10 +137,10 @@ class HallucinationProbe:
         plt.legend(by_label.values(), by_label.keys(), ncol=3, fontsize='small')
         plt.tight_layout()
         plt.grid(alpha=0.5)
-        plt.savefig(plot_dir / "prob_dist_folds.png", dpi=200)
+        plt.savefig(plot_dir / "prob_dist_folds.png", dpi=150)
         plt.close()
 
-        plt.figure(figsize=(7, 5))
+        plt.figure(figsize=(8, 4))
         plt.hist(all_probs[all_y == 0], bins=30, alpha=0.6, density=True, label="truthful")
         plt.hist(all_probs[all_y == 1], bins=30, alpha=0.6, density=True, label="hallucinated")
         plt.xlabel("Predicted probability")
@@ -148,7 +148,7 @@ class HallucinationProbe:
         plt.title("Probability distribution aggregated")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(plot_dir / "prob_dist_combined.png", dpi=200)
+        plt.savefig(plot_dir / "prob_dist_combined.png", dpi=150)
         plt.grid(alpha=0.5)
         plt.close()
 
