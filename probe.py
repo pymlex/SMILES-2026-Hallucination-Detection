@@ -1,178 +1,173 @@
-"""
-probe.py — Hallucination probe classifier (student-implemented).
-
-Implements ``HallucinationProbe``, a binary MLP that classifies feature
-vectors as truthful (0) or hallucinated (1).  Called from ``solution.py``
-via ``evaluate.run_evaluation``.  All four public methods (``fit``,
-``fit_hyperparameters``, ``predict``, ``predict_proba``) must be implemented
-and their signatures must not change.
-"""
-
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import torch.nn as nn
-from sklearn.metrics import f1_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    roc_auc_score,
+    roc_curve,
+)
 from sklearn.preprocessing import StandardScaler
 
 
-class HallucinationProbe(nn.Module):
-    """Binary classifier that detects hallucinations from hidden-state features.
-
-    Extends ``torch.nn.Module``; the default architecture is a single
-    hidden-layer MLP with ``StandardScaler`` pre-processing.  The network is
-    built lazily in ``fit()`` once the feature dimension is known.
-    """
+class HallucinationProbe:
+    _global_fold_id: int = 0
+    _val_probs_all: list[np.ndarray] = []
+    _val_y_all: list[np.ndarray] = []
+    _val_preds_all: list[np.ndarray] = []
 
     def __init__(self) -> None:
-        super().__init__()
-        self._net: nn.Sequential | None = None  # built lazily in fit()
+        self._threshold: float = 0.5
         self._scaler = StandardScaler()
-        self._threshold: float = 0.5  # tuned by fit_hyperparameters()
-
-    # ------------------------------------------------------------------
-    # STUDENT: Replace or extend the network definition below.
-    # ------------------------------------------------------------------
-    def _build_network(self, input_dim: int) -> None:
-        """Instantiate the network layers.
-
-        Called once at the start of ``fit()`` when ``input_dim`` is known.
-
-        Args:
-            input_dim: Feature vector dimensionality.
-        """
-        self._net = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
-        )
-
-    # ------------------------------------------------------------------
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass — returns raw logits of shape ``(n_samples,)``.
-
-        Args:
-            x: Float tensor of shape ``(n_samples, feature_dim)``.
-
-        Returns:
-            1-D tensor of raw (pre-sigmoid) logits.
-        """
-        if self._net is None:
-            raise RuntimeError(
-                "Network has not been built yet. Call fit() before forward()."
-            )
-        return self._net(x).squeeze(-1)
+        self._models: list[LogisticRegression] = []
+        self._C: float = 0.01
+        self._random_state: int = 42
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "HallucinationProbe":
-        """Train the probe on labelled feature vectors.
+        HallucinationProbe._global_fold_id += 1
 
-        Scales features with ``StandardScaler``, builds the network if needed,
-        and optimises with Adam + ``BCEWithLogitsLoss``.
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.int64)
 
-        Args:
-            X: Feature matrix of shape ``(n_samples, feature_dim)``.
-            y: Integer label vector of shape ``(n_samples,)``; 0 = truthful,
-               1 = hallucinated.
-
-        Returns:
-            ``self`` (for method chaining).
-        """
         X_scaled = self._scaler.fit_transform(X)
 
-        self._build_network(X_scaled.shape[1])
+        rng = np.random.RandomState(self._random_state)
+        self._models = []
+        for i in range(10):
+            boot = rng.choice(len(y), size=len(y), replace=True)
+            if len(np.unique(y[boot])) < 2:
+                boot = np.arange(len(y))
+            clf = LogisticRegression(
+                C=self._C,
+                penalty="l2",
+                class_weight=None,
+                max_iter=5000,
+                solver="lbfgs",
+                random_state=self._random_state + i,
+            )
+            clf.fit(X_scaled[boot], y[boot])
+            self._models.append(clf)
 
-        X_t = torch.from_numpy(X_scaled).float()
-        y_t = torch.from_numpy(y.astype(np.float32))
-
-        # Weight positive examples by neg/pos ratio to handle class imbalance.
-        n_pos = int(y.sum())
-        n_neg = len(y) - n_pos
-        pos_weight = torch.tensor([n_neg / max(n_pos, 1)], dtype=torch.float32)
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-
-        # ------------------------------------------------------------------
-        # STUDENT: Replace or extend the training loop below.
-        # ------------------------------------------------------------------
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-
-        self.train()
-        for _ in range(200):
-            optimizer.zero_grad()
-            logits = self(X_t)
-            loss = criterion(logits, y_t)
-            loss.backward()
-            optimizer.step()
-        # ------------------------------------------------------------------
-
-        self.eval()
         return self
 
-    def fit_hyperparameters(
-        self, X_val: np.ndarray, y_val: np.ndarray
-    ) -> "HallucinationProbe":
-        """Tune the decision threshold on a validation set to maximise F1.
-
-        The chosen threshold is stored in ``self._threshold`` and used by
-        subsequent ``predict`` calls.  Call this after ``fit`` and before
-        ``predict``.
-
-        Args:
-            X_val: Validation feature matrix of shape
-                   ``(n_val_samples, feature_dim)``.
-            y_val: Integer label vector of shape ``(n_val_samples,)``;
-                   0 = truthful, 1 = hallucinated.
-
-        Returns:
-            ``self`` (for method chaining).
-        """
+    def fit_hyperparameters(self, X_val: np.ndarray, y_val: np.ndarray) -> "HallucinationProbe":
         probs = self.predict_proba(X_val)[:, 1]
+        best_t = 0.5
+        best_acc = -1.0
+        for t in np.linspace(0.01, 0.99, 99):
+            pred = (probs >= t).astype(int)
+            acc = accuracy_score(y_val, pred)
+            if acc > best_acc:
+                best_acc = acc
+                best_t = t
+        self._threshold = float(best_t)
+        preds = (probs >= self._threshold).astype(int)
 
-        # Candidate thresholds: unique predicted probabilities plus a coarse grid.
-        candidates = np.unique(np.concatenate([probs, np.linspace(0.0, 1.0, 101)]))
+        HallucinationProbe._val_probs_all.append(probs)
+        HallucinationProbe._val_y_all.append(y_val)
+        HallucinationProbe._val_preds_all.append(preds)
 
-        best_threshold = 0.5
-        best_f1 = -1.0
-        for t in candidates:
-            y_pred_t = (probs >= t).astype(int)
-            score = f1_score(y_val, y_pred_t, zero_division=0)
-            if score > best_f1:
-                best_f1 = score
-                best_threshold = float(t)
+        if HallucinationProbe._global_fold_id == 5:
+            self._save_summary_plots()
 
-        self._threshold = best_threshold
         return self
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """Predict binary labels for feature vectors.
+    @classmethod
+    def _save_summary_plots(cls):
+        plot_dir = Path("plots")
+        plot_dir.mkdir(exist_ok=True)
 
-        Uses the decision threshold in ``self._threshold`` (default ``0.5``;
-        updated by ``fit_hyperparameters``).
+        all_y = np.concatenate(cls._val_y_all)
+        all_probs = np.concatenate(cls._val_probs_all)
+        all_preds = np.concatenate(cls._val_preds_all)
 
-        Args:
-            X: Feature matrix of shape ``(n_samples, feature_dim)``.
+        plt.figure(figsize=(8, 8))
+        tprs = []
+        aucs = []
+        mean_fpr = np.linspace(0, 1, 100)
+        for yt, pt in zip(cls._val_y_all, cls._val_probs_all):
+            fpr, tpr, _ = roc_curve(yt, pt)
+            tprs.append(np.interp(mean_fpr, fpr, tpr))
+            tprs[-1][0] = 0.0
+            aucs.append(auc(fpr, tpr))
+            plt.plot(fpr, tpr, alpha=0.3, lw=1)
+        mean_tpr = np.mean(tprs, axis=0)
+        mean_tpr[-1] = 1.0
+        mean_auc = auc(mean_fpr, mean_tpr)
+        std_auc = np.std(aucs)
+        plt.plot(mean_fpr, mean_tpr, color='b', label=f"Mean ROC (AUC = {mean_auc:.3f} ± {std_auc:.3f})", lw=2)
+        tprs_upper = np.minimum(mean_tpr + np.std(tprs, axis=0), 1)
+        tprs_lower = np.maximum(mean_tpr - np.std(tprs, axis=0), 0)
+        plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=0.2, label="± 1 std")
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlabel("FPR")
+        plt.ylabel("TPR")
+        plt.title("ROC curves on validation folds")
+        plt.legend(loc="lower right")
+        plt.tight_layout()
+        plt.savefig(plot_dir / "summary_roc_val.png", dpi=200)
+        plt.grid(alpha=0.5)
+        plt.close()
 
-        Returns:
-            Integer array of shape ``(n_samples,)`` with values in ``{0, 1}``.
-        """
-        return (self.predict_proba(X)[:, 1] >= self._threshold).astype(int)
+        plt.figure(figsize=(8, 5))
+        n_folds = 5
+        cmap_truth = plt.get_cmap("Blues")
+        cmap_halluc = plt.get_cmap("Oranges")
+
+        for i, (y_f, p_f) in enumerate(zip(cls._val_y_all, cls._val_probs_all)):
+            color_val = 0.4 + (i / (n_folds - 1)) * 0.5
+            
+            plt.hist(p_f[y_f == 0], bins=20, alpha=0.3, density=True, 
+                     label=f"truthful {i+1}", color=cmap_truth(color_val))
+            plt.hist(p_f[y_f == 1], bins=20, alpha=0.3, density=True, 
+                     label=f"hallucinated {i+1}", color=cmap_halluc(color_val))
+
+        plt.xlabel("Predicted probability")
+        plt.ylabel("Density")
+        plt.title("Probability distributions")
+        handles, labels = plt.gca().get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        plt.legend(by_label.values(), by_label.keys(), ncol=3, fontsize='small')
+        plt.tight_layout()
+        plt.grid(alpha=0.5)
+        plt.savefig(plot_dir / "prob_dist_folds.png", dpi=200)
+        plt.close()
+
+        plt.figure(figsize=(7, 5))
+        plt.hist(all_probs[all_y == 0], bins=30, alpha=0.6, density=True, label="truthful")
+        plt.hist(all_probs[all_y == 1], bins=30, alpha=0.6, density=True, label="hallucinated")
+        plt.xlabel("Predicted probability")
+        plt.ylabel("Density")
+        plt.title("Probability distribution aggregated")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(plot_dir / "prob_dist_combined.png", dpi=200)
+        plt.grid(alpha=0.5)
+        plt.close()
+
+        cm = confusion_matrix(all_y, all_preds)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["truthful", "hallucinated"])
+        disp.plot()
+        plt.title("Aggregated confusion matrix on validation folds")
+        plt.tight_layout()
+        plt.savefig(plot_dir / "confusion_matrix_val.png", dpi=150)
+        plt.close()
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Return class probability estimates.
-
-        Args:
-            X: Feature matrix of shape ``(n_samples, feature_dim)``.
-
-        Returns:
-            Array of shape ``(n_samples, 2)`` where column 1 contains the
-            estimated probability of the hallucinated class (label 1).
-            Used to compute AUROC.
-        """
+        X = np.asarray(X, dtype=np.float64)
         X_scaled = self._scaler.transform(X)
-        X_t = torch.from_numpy(X_scaled).float()
-        with torch.no_grad():
-            logits = self(X_t)
-            prob_pos = torch.sigmoid(logits).numpy()
+        prob_pos = np.mean(
+            [clf.predict_proba(X_scaled)[:, 1] for clf in self._models],
+            axis=0,
+        )
         return np.stack([1.0 - prob_pos, prob_pos], axis=1)
 
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        return (self.predict_proba(X)[:, 1] >= self._threshold).astype(int)
