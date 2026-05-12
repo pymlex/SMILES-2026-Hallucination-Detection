@@ -88,7 +88,7 @@ class HallucinationProbe:
         all_probs = np.concatenate(cls._val_probs_all)
         all_preds = np.concatenate(cls._val_preds_all)
 
-        plt.figure(figsize=(4, 4))
+        plt.figure(figsize=(6, 6))
         tprs = []
         aucs = []
         mean_fpr = np.linspace(0, 1, 100)
@@ -112,7 +112,7 @@ class HallucinationProbe:
         plt.title("ROC curves on validation folds")
         plt.legend(loc="lower right")
         plt.tight_layout()
-        plt.savefig(plot_dir / "summary_roc_val.png", dpi=100)
+        plt.savefig(plot_dir / "summary_roc_val.png", dpi=120)
         plt.grid(alpha=0.5)
         plt.close()
 
