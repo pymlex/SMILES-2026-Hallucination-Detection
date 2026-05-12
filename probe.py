@@ -113,7 +113,7 @@ class HallucinationProbe:
         plt.legend(loc="lower right")
         plt.tight_layout()
         plt.grid(alpha=0.5)
-        plt.savefig(plot_dir / "summary_roc_val.png", dpi=150)
+        plt.savefig(plot_dir / "summary_roc_val.png", dpi=130)
         plt.close()
 
         plt.figure(figsize=(10, 4))
