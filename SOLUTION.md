@@ -69,7 +69,7 @@ The final probe was retrained on all 689 labelled examples. It was used to produ
 
 ![Confusion matrix](plots/confusion_matrix_val.png)
 
-Majority of errors come from truthful answers that the model mislabels as hallucinated.
+The majority of errors come from truthful answers that the model mislabels as hallucinated.
 
 ### Probability distribution
 
@@ -79,7 +79,7 @@ The histogram shows the predicted probabilities for both classes across all vali
 
 ### Probability distributions per fold
 
-Overlaid histograms for each fold show that the separation remains stable across different data splits. All five folds exhibit similar behaviour. A narrow peak for hallucinated samples around 1.0 and a broad distribution for truthful samples.
+Overlaid histograms for each fold show that the separation remains stable across different data splits. All five folds exhibit similar behaviour. There is a narrow peak for hallucinated samples around 1.0 and a broad distribution for truthful samples.
 
 ![Probability distributions per fold](plots/prob_dist_folds.png)
 
@@ -88,7 +88,7 @@ Overlaid histograms for each fold show that the separation remains stable across
 ### Classifier
 
 - **MLP** from 5 to 1000 neurons with ReLU and GELU, dropout, and batch norm consistently reached train AUROC about 1.0 while validation AUROC plateaued around 0.72–0.78. We guess a small dataset with high-dimensional features cannot support a neural probe.
-- **RandomForest** and **CatBoost** overfit less than MLPs but still underperform a heavily regularised logistic regression.
+- **RandomForest** and **CatBoost** overfit less than MLPs but still underperformed a heavily regularised logistic regression.
 - **Logistic regression ensemble** with the number of models increasing from 5 to 10, 50 or 100 gave virtually identical results within approximately 0.2 pp AUROC.
 
 | Number of logreg models | Test AUROC |
@@ -116,5 +116,5 @@ Each layer was tested individually with the same feature extraction, which is ma
 - **Only max pooling** without mean gives a slightly lower AUROC.
 - **Only mean pooling** is noticeably worse.
 - **Response length** consistently adds about 1–2 pp AUROC.
-- **PCA** degraded performance, likely because the hallucination signal lives in low‑variance directions, that is a hypotesis.
+- **PCA** degraded performance, likely because the hallucination signal lives in low‑variance directions, that is a hypothesis.
 - **Geometric** scalars such as norms, cosine drift, `L2` distances did not improve the final result and were omitted.
