@@ -71,7 +71,7 @@ The final probe was retrained on all 689 labelled examples. It was used to produ
 
 Majority of errors come from truthful answers that the model mislabels as hallucinated.
 
-### Probability distribution (aggregated)
+### Probability distribution
 
 The histogram shows the predicted probabilities for both classes across all validation folds. Hallucinated samples are sharply concentrated around 0.95–1.0, while truthful samples spread across the whole range. It shows that the model is very confident on hallucinations but uncertain on some truthful answers.
 

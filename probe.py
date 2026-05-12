@@ -112,8 +112,8 @@ class HallucinationProbe:
         plt.title("ROC curves on validation folds")
         plt.legend(loc="lower right")
         plt.tight_layout()
-        plt.savefig(plot_dir / "summary_roc_val.png", dpi=120)
         plt.grid(alpha=0.5)
+        plt.savefig(plot_dir / "summary_roc_val.png", dpi=150)
         plt.close()
 
         plt.figure(figsize=(10, 4))
