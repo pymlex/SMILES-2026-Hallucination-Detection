@@ -34,7 +34,7 @@ The resulting six vectors (3 layers with 2 pooling methods applied) are concaten
 
 `HallucinationProbe` is an ensemble of **10** `LogisticRegression` models. Each model is trained on a bootstrap sample of the training set, the loss is:
 
-$$\hat{\beta}_i = \arg\min_{\beta} \left\{ -\frac{1}{|B_i|}\sum_{j \in B_i} \big[ y_j \log p_j + (1-y_j)\log(1-p_j) \big] + 0.01 \cdot \|\beta\|_2^2 \right\}$$
+$$\hat{\beta}_i = \arg\min_{\beta} \Bigg[ -\frac{1}{|B_i|}\sum_{j \in B_i} \big[ y_j \log p_j + (1-y_j)\log(1-p_j) \big] + 0.01 \cdot \|\beta\|_2^2 \Bigg]$$
 
 Predictions are obtained by averaging the predicted probabilities of all 10 models:
 
