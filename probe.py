@@ -88,7 +88,7 @@ class HallucinationProbe:
         all_probs = np.concatenate(cls._val_probs_all)
         all_preds = np.concatenate(cls._val_preds_all)
 
-        plt.figure(figsize=(6, 6))
+        plt.figure(figsize=(5, 5))
         tprs = []
         aucs = []
         mean_fpr = np.linspace(0, 1, 100)
